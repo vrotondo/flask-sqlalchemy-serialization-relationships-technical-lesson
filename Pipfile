@@ -12,8 +12,7 @@ ipdb = "0.13.9"
 importlib-metadata = "6.0.0"
 importlib-resources = "5.10.0"
 Faker = "14.2.0"
-sqlalchemy-serializer = "*"
-
+marshmallow = "3.20.1"
 
 [requires]
 python_full_version = "3.8.13"
