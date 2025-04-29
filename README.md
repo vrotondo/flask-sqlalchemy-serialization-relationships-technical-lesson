@@ -626,7 +626,6 @@ programs that can easily share data with others.
 ## Considerations
 
 ### Recursion Management
-
 Always guard against infinite loops by selectively excluding fields in nested 
 serialization.
 
