@@ -168,8 +168,7 @@ For the `ZookeeperSchema`, we'll add `id`, `name`, and `birthday`.
 ```python
 class ZookeeperSchema(Schema):
     id = fields.Int(dump_only=True)
-    name = fields.Str()
-    birthday = fields.String()
+    name = fields.String()
     birthday = fields.DateTime()
 ```
 
