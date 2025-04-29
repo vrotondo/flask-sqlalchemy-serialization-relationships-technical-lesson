@@ -204,8 +204,7 @@ For the `ZookeeperSchema`, we'll add animals as a list.
 ```python
 class ZookeeperSchema(Schema):
     id = fields.Int(dump_only=True)
-    name = fields.Str()
-    birthday = fields.String()
+    name = fields.String()
     birthday = fields.DateTime()
 
     animals = fields.List(fields.Nested(AnimalSchema))
@@ -509,7 +508,7 @@ class Zookeeper(db.Model):
 
 class ZookeeperSchema(Schema):
     id = fields.Int(dump_only=True)
-    name = fields.Str()
+    name = fields.String()
     birthday = fields.DateTime()
     animals = fields.List(fields.Nested(AnimalSchema(exclude=("zookeeper",))))
 
