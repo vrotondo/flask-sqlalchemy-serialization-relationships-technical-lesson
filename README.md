@@ -7,6 +7,22 @@ SQLAlchemy model into a dictionary. In this lesson, we'll serialize models that
 have relationships. We'll use serialization rules to include or exclude
 attributes to avoid issues with nested models and infinite recursion.
 
+## Scenario
+
+You have been hired as a backend engineer at a zoo management company. The existing 
+backend API allows users to retrieve information about animals, enclosures, and 
+zookeepers. However, users increasingly request detailed data that shows relationships 
+— for example, which animals are in a specific enclosure, or which zookeeper cares for 
+which animals.
+
+Unfortunately, the current API returns only simple flat data, without showing any relational 
+connections. Moreover, attempts to serialize relationships have caused performance issues, 
+including infinite recursion errors.
+
+You have been tasked with refactoring the serialization logic using Marshmallow to properly 
+serialize models and their relationships, ensuring users can retrieve structured data without 
+errors.
+
 ## Tools & Resources
 
 - [GitHub Repo](https://github.com/learn-co-curriculum/flask-sqlalchemy-serialization-relationships-technical-lesson)
@@ -37,7 +53,29 @@ $ export FLASK_RUN_PORT=5555
 
 ### Task 1: Define the Problem
 
+In real-world applications, data often has complex relationships — one-to-many, 
+many-to-many, and so forth. Simply serializing each model individually is not 
+enough: users expect a complete picture that includes related data. However, 
+naively serializing these relationships can cause:
+
+* Recursion errors (infinite loops between objects)
+* Performance bottlenecks (overly deep nested data)
+* Difficulty maintaining API responses (users receiving too much or too little data)
+
+The problem is how to serialize models and their relationships cleanly using Marshmallow, 
+without creating recursion or overwhelming API consumers with unnecessary nesting.
+
 ### Task 2: Determine the Design
+
+* Schemas for Each Model: 
+  * Create a Marshmallow Schema for each model (Animal, Zookeeper, Enclosure).
+* Nested Fields for Relationships: 
+  * Use fields.Nested and fields.List(fields.Nested) to include relationships cleanly.
+* Use lambda for Forward References: 
+  * To avoid circular dependency issues when nesting, define nested schemas lazily with lambda: SchemaName.
+* Control Nesting with exclude:
+  * To prevent infinite recursion, use the exclude parameter to omit nested fields that would otherwise cause loops.
+* Update endpoints to use marshmallow schemas.
 
 ### Task 3: Develop, Test, and Refine the Code
 
@@ -586,3 +624,26 @@ By using SQLAlchemy-Serializer, programmers can create faster and more efficient
 programs that can easily share data with others.
 
 ## Considerations
+
+### Recursion Management
+
+Always guard against infinite loops by selectively excluding fields in nested 
+serialization.
+
+### Selective Serialization: 
+Only serialize the fields that matter for the client request, avoiding unnecessary 
+payload size.
+
+### Performance Impacts: 
+Serializing deeply nested or large collections can slow down API responses 
+significantly — use pagination, which we'll discuss in a later course, or 
+filtering if needed.
+
+### Future-Proofing: 
+New models or relationships may require updates to existing schemas. Design 
+your schema relationships to be modular and easily extendable.
+
+### Security Concerns: 
+If sensitive fields exist (like user passwords in other apps), ensure they 
+are excluded from serialization with dump_only or exclude.
+
