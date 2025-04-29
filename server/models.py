@@ -1,8 +1,6 @@
-# server/models.py
-
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import MetaData
-from sqlalchemy_serializer import SerializerMixin
+from marshmallow import Schema, fields
 
 convention = {
     "ix": "ix_%(column_0_label)s",
@@ -15,6 +13,22 @@ convention = {
 metadata = MetaData(naming_convention=convention)
 
 db = SQLAlchemy(metadata=metadata)
+
+class Animal(db.Model):
+    __tablename__ = 'animals'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, unique=True)
+    species = db.Column(db.String)
+
+    zookeeper_id = db.Column(db.Integer, db.ForeignKey('zookeepers.id'))
+    enclosure_id = db.Column(db.Integer, db.ForeignKey('enclosures.id'))
+
+    enclosure = db.relationship('Enclosure', back_populates='animals')
+    zookeeper = db.relationship('Zookeeper', back_populates='animals')
+
+    def __repr__(self):
+        return f'<Animal {self.name}, a {self.species}>'
 
 
 class Zookeeper(db.Model):
@@ -35,20 +49,3 @@ class Enclosure(db.Model):
     open_to_visitors = db.Column(db.Boolean)
 
     animals = db.relationship('Animal', back_populates='enclosure')
-
-
-class Animal(db.Model):
-    __tablename__ = 'animals'
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String, unique=True)
-    species = db.Column(db.String)
-
-    zookeeper_id = db.Column(db.Integer, db.ForeignKey('zookeepers.id'))
-    enclosure_id = db.Column(db.Integer, db.ForeignKey('enclosures.id'))
-
-    enclosure = db.relationship('Enclosure', back_populates='animals')
-    zookeeper = db.relationship('Zookeeper', back_populates='animals')
-
-    def __repr__(self):
-        return f'<Animal {self.name}, a {self.species}>'

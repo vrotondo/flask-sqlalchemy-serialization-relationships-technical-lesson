@@ -1,32 +1,16 @@
-# Serialization and Relationships : Code-Along
-
-## Learning Goals
-
-- Use SQLAlchemy-Serializer to convert SQLAlchemy objects with relationships
-  into dictionaries.
-
----
-
-## Key Vocab
-
-- **Serialization**: a process to convert programmatic data such as a Python
-  object to a sequence of bytes that can be shared with other programs,
-  computers, or networks.
-- **Deserialization**: the reverse process, converting a sequence of bytes back
-  to programmatic data.
-- **SQLAlchemy-Serializer**: A powerful tool for serializing data in Python
-  using the SQLAlchemy ORM.
-
----
+# Technical Lesson: Serialization and Relationships
 
 ## Introduction
 
-We saw in a prior lesson how to use SQLAlchemy-Serializer to convert a
+We saw in a prior lesson how to use Marshmallow to convert a
 SQLAlchemy model into a dictionary. In this lesson, we'll serialize models that
 have relationships. We'll use serialization rules to include or exclude
 attributes to avoid issues with nested models and infinite recursion.
 
----
+## Tools & Resources
+
+- [GitHub Repo](https://github.com/learn-co-curriculum/flask-sqlalchemy-serialization-relationships-technical-lesson)
+- [Marshmallow: Nesting](https://marshmallow.readthedocs.io/en/stable/nesting.html)
 
 ## Setup
 
@@ -49,9 +33,17 @@ $ export FLASK_APP=app.py
 $ export FLASK_RUN_PORT=5555
 ```
 
-Create and seed the database:
+## Instructions
 
-```console
+### Task 1: Define the Problem
+
+### Task 2: Determine the Design
+
+### Task 3: Develop, Test, and Refine the Code
+
+#### Step 1: Create and Seed the Database
+
+```bash
 flask db init
 flask db migrate -m 'initial migration'
 flask db upgrade head
@@ -61,67 +53,220 @@ python seed.py
 Updating the code to serialize the data will not impact the database schema; we
 won't need to touch Flask-Migrate again in this lesson.
 
-### `SerializerMixin`
+#### Step 2: Set Up Schemas
 
 Navigate to `models.py` and you'll notice the import at the top:
 
 ```py
 # models.py
-from sqlalchemy_serializer import SerializerMixin
+from marshmallow import Schema, fields
 ```
 
-The SerializerMixin class in SQLAlchemy-Serializer is a helpful feature that
-allows developers to quickly add serialization capabilities to their SQLAlchemy
-models. When a model class inherits from the SerializerMixin, it gains a range
-of methods for serializing and deserializing data. These methods include
-`to_dict()`, which converts the model object into a dictionary, and `to_json()`,
-which converts it into a JSON string.
+Our models are already defined, but we need to add a Schema for each model.
 
-In short, the SerializerMixin simplifies the process of data serialization by
-adding a set of predefined methods to SQLAlchemy models. Developers can
-customize these methods as needed to achieve their desired serialization format,
-and can use them to quickly transform complex database models into simpler, more
-usable data structures. Most languages can't work with Python objects, after
-all.
+```python
+class Animal(db.Model):
+    __tablename__ = 'animals'
 
-### Configuring our Models for Serialization
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, unique=True)
+    species = db.Column(db.String)
 
-In `models.py`, we'll need to reconfigure each of our models to inherit from
-`SerializerMixin`. Don't worry though- this only requires a small amount of new
-code, and we won't have to run new migrations afterward.
+    zookeeper_id = db.Column(db.Integer, db.ForeignKey('zookeepers.id'))
+    enclosure_id = db.Column(db.Integer, db.ForeignKey('enclosures.id'))
 
-```py
-# models.py
-# imports, config
+    enclosure = db.relationship('Enclosure', back_populates='animals')
+    zookeeper = db.relationship('Zookeeper', back_populates='animals')
 
-class Zookeeper(db.Model, SerializerMixin):
-    ...
+    def __repr__(self):
+        return f'<Animal {self.name}, a {self.species}>'
 
-class Enclosure(db.Model, SerializerMixin):
-    ...
+# Create AnimalSchema, inheritting from Schema
+class AnimalSchema(Schema):
+    pass
 
-class Animal(db.Model, SerializerMixin):
-    ...
+class Zookeeper(db.Model):
+    __tablename__ = 'zookeepers'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, unique=True)
+    birthday = db.Column(db.Date)
+
+    animals = db.relationship('Animal', back_populates='zookeeper')
+
+# Create ZookeeperSchema, inheritting from Schema
+class ZookeeperSchema(Schema):
+    pass
+
+class Enclosure(db.Model):
+    __tablename__ = 'enclosures'
+
+    id = db.Column(db.Integer, primary_key=True)
+    environment = db.Column(db.String)
+    open_to_visitors = db.Column(db.Boolean)
+
+    animals = db.relationship('Animal', back_populates='enclosure')
+
+# Create EnclosureSchema, inheritting from Schema
+class EnclosureSchema(Schema):
+    pass
 ```
 
-By now you should have created your database and run `seed.py`; if you haven't
-yet, do that now!
+#### Step 3: Add Columns to Schemas
 
-Once you have a populated database, navigate to the `server/` directory and run
-`flask shell` to start manipulating our models. Import all of your models and
-retrieve a `Zookeeper` record. Let's run its brand new method, `to_dict()`:
+Next, recall how to serialize database columns. We need to add these to each Schema.
 
-```console
-$ from models import *
-$ z1 = Zookeeper.query.first()
-$ z1.to_dict()
-# => RecursionError: maximum recursion depth exceeded in comparison
+For the `AnimalSchema`, we'll add `id`, `name`, and `species`.
+
+```python
+class AnimalSchema(Schema):
+    id = fields.Int(dump_only=True)
+    name = fields.String()
+    species = fields.String()
 ```
 
-While this isn't _quite_ what we were looking for, it introduces us to an
-important concept in serialization: _recursion depth_.
+For the `ZookeeperSchema`, we'll add `id`, `name`, and `birthday`.
 
-#### Recursion Depth
+```python
+class ZookeeperSchema(Schema):
+    id = fields.Int(dump_only=True)
+    name = fields.Str()
+    birthday = fields.String()
+    birthday = fields.DateTime()
+```
+
+And finally, for `EnclosureSchema`, we'll add `id`, `environment`, and `open_to_visitors`.
+
+```python
+class EnclosureSchema(Schema):
+    id = fields.Int(dump_only=True)
+    environment = fields.String()
+    open_to_visitors = fields.Boolean()
+```
+
+#### Step 4: Serialize Relationships in Schemas
+
+##### `Nested` fields in Marshmallow
+
+To use relationships with serializtion in marshmallow, we can use the `Nested` field.
+
+For the `AnimalSchema`, we'll add both zookeeper and enclosure.
+
+```python
+class AnimalSchema(Schema):
+    id = fields.Int(dump_only=True)
+    name = fields.String()
+    species = fields.String()
+
+    zookeeper = fields.Nested(ZookeeperSchema)
+    enclosure = fields.Nested(EnclosureSchema)
+```
+
+For the `ZookeeperSchema`, we'll add animals as a list.
+
+```python
+class ZookeeperSchema(Schema):
+    id = fields.Int(dump_only=True)
+    name = fields.Str()
+    birthday = fields.String()
+    birthday = fields.DateTime()
+
+    animals = fields.List(fields.Nested(AnimalSchema))
+```
+
+And finally, for `EnclosureSchema`, we'll also add animals as a list.
+
+```python
+class EnclosureSchema(Schema):
+    id = fields.Int(dump_only=True)
+    environment = fields.String()
+    open_to_visitors = fields.Boolean()
+
+    animals = fields.List(fields.Nested(AnimalSchema))
+```
+
+Now, if you try hopping into `flask shell`, you should see an error:
+
+```bash
+NameError: name 'ZookeeperSchema' is not defined
+```
+
+This error comes up because we used ZookeeperSchema (and EnclosureSchema) in
+the AnimalSchema before we defined them. Now, all Schemas use each other, so 
+there is no order we can define them in to avoid this. Instead, we need to use 
+a `lambda` for these definitions, which Marshmallow allows. Let's fix our 
+`AnimalSchema`:
+
+```python
+class AnimalSchema(Schema):
+    id = fields.Int(dump_only=True)
+    name = fields.String()
+    species = fields.String()
+
+    zookeeper = fields.Nested(lambda: ZookeeperSchema)
+    enclosure = fields.Nested(lambda: EnclosureSchema)
+```
+
+Now, you can run `flask shell` and should no longer see that error immediately.
+
+```bash
+flask shell
+>>> from models import *
+>>> a1 = Animal.query.first()
+>>> AnimalSchema().dump(a1)
+.....
+.....
+....
+RecursionError: maximum recursion depth exceeded in comparison
+```
+
+Uh oh, we have another error! Recursion depth is a common issue we run into when
+serialization with relationships. What's happening here? You can imagine our program
+trying to call something like:
+
+```
+animal
+  attributes
+  zookeeper
+  enclosure
+```
+
+then:
+
+```
+animal
+  attributes
+  zookeeper
+    attributes
+    animals
+  enclosure
+    attributes
+    animals
+```
+
+then:
+
+```
+animal
+  attributes
+  zookeeper
+    attributes
+    animals
+      attributes
+      zookeper
+      enclosure
+  enclosure
+    attributes
+    animals
+      attributes
+      zookeeper
+      enclosure
+```
+
+And on and on. It will continue nesting animals, zookeepers, and enclosures unless
+we do somethine about it.
+
+##### Recursion Depth
 
 Sometimes, the process of serialization can get very complex, especially if the
 data we're working with has many layers of nested structures or relationships.
@@ -138,65 +283,186 @@ structure and we don't set a limit on the recursion depth, the program might
 keep going deeper and deeper into the family tree, creating more and more data
 to process, until it runs out of memory or crashes.
 
-To avoid this problem, we can set a limit on the recursion depth, so that the
-program only goes a certain number of layers deep before stopping. This helps us
-manage the memory and computational resources needed for the serialization
-process and ensures that the program runs smoothly.
+To avoid this problem, we can exclude or include fields when pulling relationships.
 
-### `serialize_rules`
+##### `exclude` and `include`
 
-To avoid any errors involving recursion depth, we can set the `serialize_rules`
-class attribute in each of our models. This is a tuple (so remember to include
-trailing commas!) where we can specify which fields to exclude. To avoid diving
-too many layers into each record's relationships, we will tell
-SQLAlchemy-Serializer to not look back at the original record from within its
-related records. Here's what that will look like:
+We saw these in the previous serialize lesson, to specify if we want to leave out
+any fields or only include a couple of columns. This option is crucial when 
+serializing relationships however. Let's update our Schemas to avoid recursion.
+
+Starting with AnimalSchema, we need to exclude animals from both zookeeper and
+enclosure fields. Note that if you exclude the comma after animals, you will see an
+error that exclude requires a list of strings as an argument.
 
 ```py
-# models.py
-# imports, config
+class AnimalSchema(Schema):
+    id = fields.Int(dump_only=True)
+    name = fields.String()
+    species = fields.String()
+    zookeeper = fields.Nested(lambda: ZookeeperSchema(exclude=("animals",)))
+    enclosure = fields.Nested(lambda: EnclosureSchema(exclude=("animals",)))
+```
 
-class Zookeeper(db.Model, SerializerMixin):
-    __tablename__ = 'zookeepers'
+Next, lets exclude zookeeper from animals in Zookeeper Schema:
 
-    # don't forget that every tuple needs at least one comma!
-    serialize_rules = ('-animals.zookeeper',)
+```py
+class ZookeeperSchema(Schema):
+    id = fields.Int(dump_only=True)
+    name = fields.Str()
+    birthday = fields.DateTime()
+    animals = fields.List(fields.Nested(AnimalSchema(exclude=("zookeeper", "enclosure"))))
+```
 
-class Enclosure(db.Model, SerializerMixin):
-    __tablename__ = 'enclosures'
+And finally, update EnclosureSchema:
 
-    serialize_rules = ('-animals.enclosure',)
-
-class Animal(db.Model, SerializerMixin):
-    __tablename__ = 'animals'
-
-    serialize_rules = ('-zookeeper.animals', '-enclosure.animals',)
+```py
+class EnclosureSchema(Schema):
+    id = fields.Int(dump_only=True)
+    environment = fields.String()
+    open_to_visitors = fields.Boolean()
+    animals = fields.List(fields.Nested(AnimalSchema(exclude=("enclosure",))))
 ```
 
 Save your changes and navigate back to the Flask shell. Let's try converting our
 record to a dictionary again (your result will differ):
 
-```console
-$ z1 = Zookeeper.query.first()
-$ z1.to_dict()
-# => {'birthday': '1961-08-19', 'id': 1, 'name': 'Christina Hill', 'animals': [{'name': 'Heather', 'enclosure_id': 16, 'enclosure': {'id': 16, 'environment': 'Ocean', 'open_to_visitors': False}, 'zookeeper_id': 1, 'species': 'Tiger', 'id': 13}, ...]}
+```bash
+>>> from models import *
+>>> z1 = Zookeeper.query.first()
+>>> ZookeeperSchema().dump(z1)
+# => {'id': 1, 'name': 'Christine Johnson', 'birthday': '2000-12-30', 'animals': [{'id': 3, 'name': 'Crystal', 'species': 'Ostrich', 'enclosure': {'id': 1, 'environment': 'Cage', 'open_to_visitors': False}}, {'id': 137, 'name': 'Larry', 'species': 'Tiger', 'enclosure': {'id': 16, 'environment': 'Cage', 'open_to_visitors': False}}, {'id': 143, 'name': 'Amy', 'species': 'Bear', 'enclosure': {'id': 18, 'environment': 'Trees', 'open_to_visitors': False}}, {'id': 150, 'name': 'Mitchell', 'species': 'Elephant', 'enclosure': {'id': 7, 'environment': 'Cave', 'open_to_visitors': False}}, {'id': 171, 'name': 'Lee', 'species': 'Ostrich', 'enclosure': {'id': 16, 'environment': 'Cage', 'open_to_visitors': False}}, {'id': 187, 'name': 'Julia', 'species': 'Snake', 'enclosure': {'id': 24, 'environment': 'Cage', 'open_to_visitors': True}}, {'id': 190, 'name': 'Sierra', 'species': 'Bear', 'enclosure': {'id': 18, 'environment': 'Trees', 'open_to_visitors': False}}]}
 ```
 
 Just like that, we have a dictionary representation of a Python SQLAlchemy
 object. This will be much easier for other applications to use!
 
-## `serialize_only`
+#### Step 5: Test Relationships in Flask Shell
 
-We can also use the `serialize_only` class attribute on a model to specify
-fields to include in serialization. For example, we can serialize the
-zookeeper's id and name, along with the name and species of each associated
-animal (don't modify your code, this is just an example of `serialize_only`).
+Let's head back to the Flask shell and give these a shot:
+
+```bash
+$ from models import *
+$ z1 = Zookeeper.query.first()
+$ z1
+# => <Zookeeper 1>
+$ ZookeeperSchema().dump(z1)
+# => {'id': 1, 'name': 'Christine Johnson', 'birthday': '2000-12-30', 'animals': [{'id': 3, 'name': 'Crystal', 'species': 'Ostrich', 'enclosure': {'id': 1, 'environment': 'Cage', 'open_to_visitors': False}}, {'id': 137, 'name': 'Larry', 'species': 'Tiger', 'enclosure': {'id': 16, 'environment': 'Cage', 'open_to_visitors': False}}, {'id': 143, 'name': 'Amy', 'species': 'Bear', 'enclosure': {'id': 18, 'environment': 'Trees', 'open_to_visitors': False}}, {'id': 150, 'name': 'Mitchell', 'species': 'Elephant', 'enclosure': {'id': 7, 'environment': 'Cave', 'open_to_visitors': False}}, {'id': 171, 'name': 'Lee', 'species': 'Ostrich', 'enclosure': {'id': 16, 'environment': 'Cage', 'open_to_visitors': False}}, {'id': 187, 'name': 'Julia', 'species': 'Snake', 'enclosure': {'id': 24, 'environment': 'Cage', 'open_to_visitors': True}}, {'id': 190, 'name': 'Sierra', 'species': 'Bear', 'enclosure': {'id': 18, 'environment': 'Trees', 'open_to_visitors': False}}]}
+$ ZookeeperSchema(only=("name",)).dump(z1)
+# => {'name': 'Christine Johnson'}
+$ a1 = Animal.query.first()
+$ a1
+# => <Animal Melanie, a Snake>
+$ AnimalSchema().dump(a1)
+# => {'id': 1, 'name': 'Melanie', 'species': 'Snake', 'zookeeper': {'id': 16, 'name': 'Tanya Brown', 'birthday': '1984-12-19'}, 'enclosure': {'id': 22, 'environment': 'Cage', 'open_to_visitors': True}}
+```
+
+> Note, the a1 print out is different from z1 since the Animal class has a defined custom `__repr__` method while Zookeeper does not.
+
+#### Step 6: Update Endpoints in `app.py`
+
+Finally, we can update our endpoints in `app.py` to use our serialization.
+
+Delete or comment out the response_body code for each route, and add a line to set `response_body`
+for each route to use the `dump` method.
+
+```python
+@app.route('/animals/<int:id>')
+def animal_by_id(id):
+    animal = Animal.query.filter(Animal.id == id).first()
+    # response_body = f''
+    # response_body += f'<ul>ID: {animal.id}</ul>'
+    # response_body += f'<ul>Name: {animal.name}</ul>'
+    # response_body += f'<ul>Species: {animal.species}</ul>'
+    # response_body += f'<ul>Zookeeper: {animal.zookeeper.name}</ul>'
+    # response_body += f'<ul>Enclosure: {animal.enclosure.environment}</ul>'
+
+    response_body = AnimalSchema().dump(animal)
+
+    return make_response(response_body)
+
+
+@app.route('/zookeepers/<int:id>')
+def zookeeper_by_id(id):
+    zookeeper = Zookeeper.query.filter(Zookeeper.id == id).first()
+    # response_body = f''
+    # response_body += f'<ul>ID: {zookeeper.id}</ul>'
+    # response_body += f'<ul>Name: {zookeeper.name}</ul>'
+    # response_body += f'<ul>Birthday: {zookeeper.birthday}</ul>'
+
+    # for animal in zookeeper.animals:
+    #     response_body += f'<ul>Animal: {animal.name}</ul>'
+
+    response_body = ZookeeperSchema().dump(zookeeper)
+
+    return make_response(response_body)
+
+
+@app.route('/enclosures/<int:id>')
+def enclosure_by_id(id):
+    enclosure = Enclosure.query.filter(Enclosure.id == id).first()
+    # response_body = f''
+    # response_body += f'<ul>ID: {enclosure.id}</ul>'
+    # response_body += f'<ul>Environment: {enclosure.environment}</ul>'
+    # response_body += f'<ul>Open to Visitors: {enclosure.open_to_visitors}</ul>'
+
+    # for animal in enclosure.animals:
+    #     response_body += f'<ul>Animal: {animal.name}</ul>'
+
+    response_body = EnclosureSchema().dump(enclosure)
+
+    return make_response(response_body)
+```
+
+Use `flask run` to look at each endpoint in the browser.
+
+#### Step 7: Verify your Code
+
+Solution Code:
 
 ```py
-class Zookeeper(db.Model, SerializerMixin):
+# server/models.py
+from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import MetaData
+from marshmallow import Schema, fields
+
+convention = {
+    "ix": "ix_%(column_0_label)s",
+    "uq": "uq_%(table_name)s_%(column_0_name)s",
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
+    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
+    "pk": "pk_%(table_name)s"
+}
+
+metadata = MetaData(naming_convention=convention)
+
+db = SQLAlchemy(metadata=metadata)
+
+class Animal(db.Model):
+    __tablename__ = 'animals'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String, unique=True)
+    species = db.Column(db.String)
+
+    zookeeper_id = db.Column(db.Integer, db.ForeignKey('zookeepers.id'))
+    enclosure_id = db.Column(db.Integer, db.ForeignKey('enclosures.id'))
+
+    enclosure = db.relationship('Enclosure', back_populates='animals')
+    zookeeper = db.relationship('Zookeeper', back_populates='animals')
+
+    def __repr__(self):
+        return f'<Animal {self.name}, a {self.species}>'
+
+class AnimalSchema(Schema):
+    id = fields.Int(dump_only=True)
+    name = fields.String()
+    species = fields.String()
+    zookeeper = fields.Nested(lambda: ZookeeperSchema(exclude=("animals",)))
+    enclosure = fields.Nested(lambda: EnclosureSchema(exclude=("animals",)))
+
+class Zookeeper(db.Model):
     __tablename__ = 'zookeepers'
-    serialize_only = ('id', 'name', 'animals.name', 'animals.species',)
-    serialize_rules = ()
 
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String, unique=True)
@@ -204,50 +470,101 @@ class Zookeeper(db.Model, SerializerMixin):
 
     animals = db.relationship('Animal', back_populates='zookeeper')
 
+class ZookeeperSchema(Schema):
+    id = fields.Int(dump_only=True)
+    name = fields.Str()
+    birthday = fields.DateTime()
+    animals = fields.List(fields.Nested(AnimalSchema(exclude=("zookeeper",))))
+
+class Enclosure(db.Model):
+    __tablename__ = 'enclosures'
+
+    id = db.Column(db.Integer, primary_key=True)
+    environment = db.Column(db.String)
+    open_to_visitors = db.Column(db.Boolean)
+
+    animals = db.relationship('Animal', back_populates='enclosure')
+
+class EnclosureSchema(Schema):
+    id = fields.Int(dump_only=True)
+    environment = fields.String()
+    open_to_visitors = fields.Boolean()
+    animals = fields.List(fields.Nested(AnimalSchema(exclude=("enclosure",))))
 ```
 
-Calling `to_dict()` on the zookeeper results in the following:
+```py
+# server/app.py
+from flask import Flask, make_response
+from flask_migrate import Migrate
 
-```console
->>> z1 = Zookeeper.query.first()
->>> z1.to_dict()
-{'id': 1, 'animals': [{'species': 'Elephant', 'name': 'Paul'}, {'species': 'Hippo', 'name': 'Jennifer'}, {'species': 'Elephant', 'name': 'Carol'}, {'species': 'Tiger', 'name': 'Tracey'}, {'species': 'Bear', 'name': 'Derrick'}, {'species': 'Snake', 'name': 'Debra'}, {'species': 'Monkey', 'name': 'Jasmine'}], 'name': 'Johnny Smith'}
->>>
+from models import *
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///app.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+
+migrate = Migrate(app, db)
+
+db.init_app(app)
+
+
+@app.route('/')
+def index():
+    return '<h1>Zoo app</h1>'
+
+
+@app.route('/animals/<int:id>')
+def animal_by_id(id):
+    animal = Animal.query.filter(Animal.id == id).first()
+
+    response_body = AnimalSchema().dump(animal)
+
+    return make_response(response_body)
+
+
+@app.route('/zookeepers/<int:id>')
+def zookeeper_by_id(id):
+    zookeeper = Zookeeper.query.filter(Zookeeper.id == id).first()
+
+    response_body = ZookeeperSchema().dump(zookeeper)
+
+    return make_response(response_body)
+
+
+@app.route('/enclosures/<int:id>')
+def enclosure_by_id(id):
+    enclosure = Enclosure.query.filter(Enclosure.id == id).first()
+
+    response_body = EnclosureSchema().dump(enclosure)
+
+    return make_response(response_body)
+
+
+if __name__ == '__main__':
+    app.run(port=5555, debug=True)
 ```
 
-### `to_dict()`
+#### Step 8: Commit and Push Git History
 
-`to_dict()` is a simple method: it takes a SQLAlchemy object, turns its columns
-into dictionary keys, and turns its column values into dictionary values. That
-being said, it can do a bit more if we ever need to modify its output.
+* Commit and push your code:
 
-`to_dict()` has two arguments that can be passed in:
-
-- `rules` works the same as `serialize_rules` within the model. You can specify
-  additional columns to exclude here.
-- `only` allows you to specify an exhaustive list of columns to display. This
-  can be helpful if you're working with a table with many columns or you only
-  want to display one or two of a table's columns.
-
-Let's head back to the Flask shell and give these a shot:
-
-```console
-$ z1 = Zookeeper.query.first()
-$ z1.to_dict(rules=('-animals',))
-# => {'name': 'Christina Hill', 'id': 1, 'birthday': '1961-08-19'}
-$ z1.to_dict(only=('name',))
-# => {'name': 'Christina Hill'}
+```bash
+git add .
+git commit -m "final solution"
+git push
 ```
 
----
+* If you created a separate feature branch, remember to open a PR on main and merge.
 
-## Instructions
+### Task 4: Document and Maintain
 
-After configuring serialization on each of your models, run `pytest` to ensure
-that each is serializable to a dictionary without any errors. When all tests are
-passing, submit your work through CodeGrade.
-
----
+Best Practice documentation steps:
+* Add comments to the code to explain purpose and logic, clarifying intent and functionality of your code to other developers.
+* Update README text to reflect the functionality of the application following https://makeareadme.com. 
+  * Add screenshot of completed work included in Markdown in README.
+* Delete any stale branches on GitHub
+* Remove unnecessary/commented out code
+* If needed, update git ignore to remove sensitive data
 
 ## Conclusion
 
@@ -268,79 +585,4 @@ arguments to the `to_dict()` method to handle these kinds of situations.
 By using SQLAlchemy-Serializer, programmers can create faster and more efficient
 programs that can easily share data with others.
 
----
-
-## Solution Code
-
-```py
-# server/models.py
-
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import MetaData
-from sqlalchemy_serializer import SerializerMixin
-
-convention = {
-    "ix": "ix_%(column_0_label)s",
-    "uq": "uq_%(table_name)s_%(column_0_name)s",
-    "ck": "ck_%(table_name)s_%(constraint_name)s",
-    "fk": "fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s",
-    "pk": "pk_%(table_name)s"
-}
-
-metadata = MetaData(naming_convention=convention)
-
-db = SQLAlchemy(metadata=metadata)
-
-
-class Zookeeper(db.Model, SerializerMixin):
-    __tablename__ = 'zookeepers'
-
-    # don't forget that every tuple needs at least one comma!
-    serialize_rules = ('-animals.zookeeper',)
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String, unique=True)
-    birthday = db.Column(db.Date)
-
-    animals = db.relationship('Animal', back_populates='zookeeper')
-
-
-class Enclosure(db.Model, SerializerMixin):
-    __tablename__ = 'enclosures'
-
-    serialize_rules = ('-animals.enclosure',)
-
-    id = db.Column(db.Integer, primary_key=True)
-    environment = db.Column(db.String)
-    open_to_visitors = db.Column(db.Boolean)
-
-    animals = db.relationship('Animal', back_populates='enclosure')
-
-
-class Animal(db.Model, SerializerMixin):
-    __tablename__ = 'animals'
-
-    serialize_rules = ('-zookeeper.animals', '-enclosure.animals',)
-
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String, unique=True)
-    species = db.Column(db.String)
-
-    zookeeper_id = db.Column(db.Integer, db.ForeignKey('zookeepers.id'))
-    enclosure_id = db.Column(db.Integer, db.ForeignKey('enclosures.id'))
-
-    enclosure = db.relationship('Enclosure', back_populates='animals')
-    zookeeper = db.relationship('Zookeeper', back_populates='animals')
-
-    def __repr__(self):
-        return f'<Animal {self.name}, a {self.species}>'
-
-```
-
-## Resources
-
-- [Quickstart - Flask-SQLAlchemy][flask_sqla]
-- [Flask-Migrate](https://flask-migrate.readthedocs.io/en/latest/)
-- [SQLAlchemy-Serializer](https://pypi.org/project/SQLAlchemy-serializer/)
-
-[flask_sqla]: https://flask-sqlalchemy.palletsprojects.com/en/2.x/quickstart/#
+## Considerations
